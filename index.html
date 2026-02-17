@@ -163,7 +163,7 @@
             const [pCount, setPCount] = useState(8);
             const [initPass, setInitPass] = useState("");
             const [user, setUser] = useState(null);
-            const ADMIN_PASSWORD = "1234";
+            const ADMIN_PASSWORD = "1337";
 
             useEffect(() => {
                 db.ref('game').on('value', snap => setGameState(snap.val()));
