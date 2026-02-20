@@ -17,7 +17,11 @@
         .p-card { background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 24px; padding: 24px; position: relative; transition: 0.6s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; min-height: 850px; backdrop-filter: blur(25px); }
         .is-exiled-card { opacity: 0.3; filter: grayscale(1) brightness(0.5); transform: scale(0.95); }
         .stat-box { padding: 10px; border-radius: 12px; transition: 0.3s; border: 1px solid transparent; }
-        .stat-revealed { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.5) !important; box-shadow: inset 0 0 15px rgba(255,255,255,0.05); }
+        .stat-revealed { 
+            background: rgba(255, 255, 255, 0.15) !important; 
+            border: 2px solid rgba(255, 255, 255, 0.8) !important; 
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2), inset 0 0 10px rgba(255, 255, 255, 0.1);
+            transform: scale(1.02);}        
         .focus-mode .game-grid { display: flex; justify-content: center; align-items: center; min-height: 70vh; }
         .focus-mode .p-card:not(.speaking-card) { display: none !important; }
         .speaking-card { transform: scale(1.15) !important; z-index: 1000 !important; border: 4px solid white !important; box-shadow: 0 0 150px rgba(255, 255, 255, 0.3) !important; background: rgba(255, 255, 255, 0.15) !important; opacity: 1 !important; filter: none !important; }
@@ -38,6 +42,19 @@
         @keyframes heart-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
         input, .stat-input { background: transparent !important; border: none !important; color: #fff; width: 100%; border-bottom: 1px solid rgba(255,255,255,0.1) !important; font-weight: 800; outline: none; }
         .p-input { background: rgba(255,255,255,0.05) !important; border: 2px solid rgba(255,255,255,0.2) !important; border-radius: 15px; padding: 15px; font-size: 30px; text-align: center; margin-bottom: 20px; color: white; width: 100%; }
+        .glass-overlay {animation: fadeIn 0.4s ease-out;}
+        .event-overlay, .glass-overlay {animation: slideUpFade 0.5s cubic-bezier(0.23, 1, 0.32, 1); /* */}
+        .event-box, .glass-box {animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* */}
+        .glass-box {animation: scaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); /* */}
+        @keyframes fadeIn {from { opacity: 0; backdrop-filter: blur(0px); } to { opacity: 1; backdrop-filter: blur(35px); }}
+        @keyframes scaleUp {from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; }}
+        @keyframes slideUpFade {from { opacity: 0; backdrop-filter: blur(0px); }to { opacity: 1; backdrop-filter: blur(45px); }}
+        @keyframes popIn {from { transform: scale(0.9); opacity: 0; }to { transform: scale(1); opacity: 1; }}
+        @keyframes dice-spin {
+            0% { transform: rotate(0deg) scale(1); }
+            30% { transform: rotate(180deg) scale(1.2); }
+            100% { transform: rotate(360deg) scale(1); }}
+        .dice-rolling { animation: dice-spin 0.5s ease-out; }
     </style></head><body>
     <div id="root"></div>
     <script type="text/babel">
@@ -45,7 +62,66 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
         const auth = firebase.auth();
+        const sfx = {
+        open: new Audio('з'),
+        click: new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3'),
+        stop: new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3'),
+        tick: new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3'),
+        raid: new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'),
+        survivor: new Audio('https://assets.mixkit.co/active_storage/sfx/600/600-preview.mp3'),
+        event: new Audio('https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3')
+        };
+    
 
+        const playSfx = (sound) => {
+            sound.currentTime = 0;
+            sound.play().catch(e => console.log("Браузер ждет клика по сайту..."));
+        };
+
+        const play = (sound) => { 
+            sound.currentTime = 0; 
+            sound.play(); 
+        };
+
+         const bgMusic = {
+            tracks: [
+                new Audio('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'),
+                new Audio('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3'),
+                new Audio('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3')
+            ],
+            currentTrack: 0,
+            isPlaying: false
+        };
+
+        bgMusic.tracks.forEach(track => {
+            track.volume = 0.3;
+            track.loop = false;
+            track.addEventListener('ended', () => {
+                bgMusic.currentTrack = (bgMusic.currentTrack + 1) % bgMusic.tracks.length;
+                bgMusic.tracks[bgMusic.currentTrack].currentTime = 0;
+                bgMusic.tracks[bgMusic.currentTrack].play();
+            });
+        });
+
+        const playBgMusic = () => {
+            if (!bgMusic.isPlaying) {
+                bgMusic.isPlaying = true;
+                bgMusic.tracks[bgMusic.currentTrack].play().catch(e => console.log("Background music error:", e));
+            }
+        };
+        
+        document.addEventListener('click', () => { bgMusic.tracks.forEach(track => track.volume = 0.02); playBgMusic(); });
+        const pauseBgMusic = () => { bgMusic.tracks.forEach(track => track.pause()); bgMusic.isPlaying = false; };
+        
+        const playRevealSound = () => playSfx(sfx.open);
+        const stopAudio = () => {
+            bgMusic.tracks.forEach(track => {
+                track.pause();
+                track.currentTime = 0;
+            });
+            bgMusic.isPlaying = false;
+        };
+        
         const MY_ACTION_CARDS = [
         "МЕДИК: Здоровье -> Идеал.", "ГЕНЕТИК: Репродукция -> ПЛОДОВИТ.", "ОБМЕН: Багаж соседа.", "БЛОКИРОВКА: Молчание круг.", "ШПИОН: Смотри козыри.",
         "МАРОДЕР: Забери лучший предмет у изгнанного.", "КАННИБАЛ: Съешь соседа, восстанови здоровье.", "ПОДСТАВА: Подбрось свой плохой факт другому.", "СУЦИДНИК: Если изгоняют тебя, забираешь любого с собой.", "ТЕРРОРИСТ: Взорви багаж троих игроков.",
@@ -115,6 +191,8 @@
         { t: "СЛЕПОЙ МУЗЫКАНТ", d: "Его музыка успокаивает и лечит фобии. У него нет вещей.", img: "https://images.unsplash.com/photo-1493225255756-d9584f8606e9?w=800" },
         { t: "ВЕТЕРИНАР-ОТСШЕЛЬНИК", d: "Пришел с собакой-ищейкой. Может вылечить болезни животных.", img: "https://images.unsplash.com/photo-1441985969246-3d4c58e37991?w=800" },
         { t: "ИНЖЕНЕР С ЧЕРТЕЖАМИ", d: "Знает, как расширить бункер на еще одно место.", img: "https://images.unsplash.com/photo-1503387762-592dea58ed23?w=800" },
+        
+       
         { t: "БЕГЛЫЙ ЗЭК", d: "Угрюмый тип с ломом. Предлагает грубую силу.", img: "https://images.unsplash.com/photo-1511367461989-f85a21fda167?w=800" },
         { t: "ДЕВУШКА С ВИРУСОМ", d: "Она заражена, но у неё есть антидот для других.", img: "https://images.unsplash.com/photo-1526253033507-4467ec74485c?w=800" },
         { t: "ГЕОЛОГ-НЕУДАЧНИК", d: "Нашел золото, но потерял всю воду. Просит обмена.", img: "https://images.unsplash.com/photo-1510915228340-29c85a43dcfe?w=800" },
@@ -173,14 +251,29 @@
 
             useEffect(() => {
                 if (!isAdmin || !gameState || !gameState.active) return;
-                const timer = setInterval(() => { db.ref('game/time').transaction(t => (t || 0) + 1); if (gameState.turnTime > 0) db.ref('game/turnTime').transaction(t => t - 1); }, 1000);
+                const timer = setInterval(() => { 
+                db.ref('game/time').transaction(t => (t || 0) + 1); 
+                playSfx(sfx.tick); 
+                        if (gameState.turnTime > 0) {
+                db.ref('game/turnTime').transaction(t => t - 1);
+            }
+                }, 1000);
                 return () => clearInterval(timer);
             }, [isAdmin, gameState?.active, gameState?.turnTime]);
 
             const handleAdminLogin = () => { if (passInput === ADMIN_PASSWORD) { setIsAdmin(true); setShowPassModal(false); } else alert("Ошибка!"); setPassInput(""); };
             const update = (path, val) => db.ref(`game/${path}`).set(val);
-            const roll = (t) => { if (t === 'age') return Math.floor(Math.random() * 99) + 1; if (t === 'years') return Math.floor(Math.random() * 40) + 1; const list = LISTS[t==='f1'||t==='f2'?'facts':t]; return list[Math.floor(Math.random() * list.length)]; };
-
+            const roll = (t, currentAge = 50) => 
+                    {
+                    if (t === 'age') return Math.floor(Math.random() * (99 - 18 + 1)) + 18; 
+                    if (t === 'years') {
+                    const maxExp = Math.max(1, currentAge - 18); 
+                    return Math.floor(Math.random() * maxExp) + 1;
+                 }
+    
+                const list = LISTS[t === 'f1' || t === 'f2' ? 'facts' : t];
+                return list[Math.floor(Math.random() * list.length)];
+            };
             const init = () => {
                 if (initPass !== ADMIN_PASSWORD) { alert("Ошибка!"); return; }
                 const players = Array.from({ length: parseInt(pCount) }, (_, i) => ({ id: i + 1, uid: '', name: `ОБЪЕКТ ${i + 1}`, sex: roll('sex'), age: roll('age'), prof: roll('prof'), profExp: roll('years'), health: roll('health'), bag: roll('bag'), hobby: roll('hobby'), hobbyExp: roll('years'), phob: roll('phob'), f1: roll('facts'), f2: roll('facts'), fert: roll('fert'), actions: [MY_ACTION_CARDS[Math.floor(Math.random()*MY_ACTION_CARDS.length)], MY_ACTION_CARDS[Math.floor(Math.random()*MY_ACTION_CARDS.length)]], revealed: {}, votedBy: [], isExiled: false, avatar: `https://i.pravatar.cc/300?u=${Math.random()}` }));
@@ -209,6 +302,8 @@
             const myIdx = gameState.players.findIndex(p => p.uid === user.uid);
             const isMeSpk = myIdx !== -1 && gameState.speakerId === gameState.players[myIdx].id;
             const maxVotes = Math.max(...gameState.players.map(p => (p.votedBy || []).length));
+            
+            const playRevealSound = () => playSfx(sfx.open);
 
             return (
                 <div className={`overlay ${gameState.speakerId ? 'focus-mode' : ''}`} onKeyDown={e => { if(e.shiftKey && (e.key === 'A' || e.key === 'Ф')) setShowPassModal(true) }} tabIndex="0">
@@ -225,17 +320,46 @@
                         </div></div>
                     )}
                     {gameState.currentEvent && <div className="event-overlay" onClick={() => isAdmin && update('currentEvent', null)}><div className="event-box"><img src={gameState.currentEvent.img} className="mx-auto h-96 rounded-3xl mb-8 border-2 border-white/20 shadow-2xl" /><h1 className="text-7xl font-black uppercase mb-4">{gameState.currentEvent.t}</h1><p className="text-4xl italic uppercase max-w-5xl mx-auto">"{gameState.currentEvent.d}"</p></div></div>}
-                    {gameState.globalStop && <div className="glass-overlay" onClick={() => isAdmin && update('globalStop', null)}><div className="glass-box border-white"><h1 className="text-8xl font-black uppercase mb-2">СТОП ИГРА!</h1><h2 className="text-3xl uppercase opacity-60 mb-6">{gameState.globalStop.user} АКТИВИРУЕТ КОЗЫРЬ</h2><p className="text-4xl font-black italic">"{gameState.globalStop.text}"</p></div></div>}
+                    {gameState.globalStop && <div className="glass-overlay" onClick={() => { playSfx(sfx.stop); isAdmin && update('globalStop', null); }}><div className="glass-box border-white"><h1 className="text-8xl font-black uppercase mb-2">СТОП ИГРА!</h1><h2 className="text-3xl uppercase opacity-60 mb-6">{gameState.globalStop.user} АКТИВИРУЕТ КОЗЫРЬ</h2><p className="text-4xl font-black italic">"{gameState.globalStop.text}"</p></div></div>}
                     
                     {isMeSpk && !gameState.players[myIdx].isExiled && (!gameState.turnTime || gameState.turnTime <= 0) && (
                         <div className="glass-overlay"><div className="glass-box border-white"><h2 className="text-4xl font-black text-white mb-12 uppercase tracking-widest">ПРОТОКОЛ ВСКРЫТИЯ</h2>
-                            <div className="grid grid-cols-2 gap-6">{['bio','prof','health','bag','hobby','phob','fert','f1','f2'].map(f => !gameState.players[myIdx].revealed?.[f] && <button key={f} onClick={() => { if(f === 'bio') { update(`players/${myIdx}/revealed/sex`, true); update(`players/${myIdx}/revealed/age`, true); update(`players/${myIdx}/revealed/bio`, true); } else update(`players/${myIdx}/revealed/${f}`, true); update('turnTime', 60); }} className="bg-white/10 border-2 border-white/30 p-6 rounded-3xl uppercase font-black hover:bg-white hover:text-black">Вскрыть {LABELS[f]}</button>)}</div>
+                            <div className="grid grid-cols-2 gap-6">{['bio','prof','health','bag','hobby','phob','fert','f1','f2'].map(f => {
+                            const p = gameState.players[myIdx];
+                            const isRev = f === 'bio' ? (p.revealed?.sex || p.revealed?.age) : p.revealed?.[f];
+                            const val = f === 'bio' ? `${p.sex}, ${p.age}л` : p[f];
+    
+                        return (
+                        <button key={f} 
+                    disabled={isRev}
+                        onClick={() => { 
+                        if(!isRev) {
+                        playSfx(sfx.open);
+                        db.ref(`game/players/${myIdx}/revealed/${f === 'bio' ? 'sex' : f}`).set(true); 
+                        if(f === 'bio') db.ref(`game/players/${myIdx}/revealed/age`).set(true); 
+                        db.ref('game/turnTime').set(60);}
+                    }}
+                             className={`flex items-center justify-between px-6 py-4 rounded-2xl font-black uppercase text-xs transition-all border-2 
+                             ${isRev ? 'bg-green-500/20 border-green-500/50 text-green-400' : 'bg-white/5 border-white/20 hover:bg-white hover:text-black'}`}
+            >
+                    <span>{LABELS[f]} {isRev ? '' : `(${val})`}</span>
+                       {isRev && <span className="text-lg">✓</span>} {/* */}
+                     </button>
+                  );
+                    })}</div>
                         </div></div>
                     )}
 
                     <div className="max-w-[1700px] mx-auto flex justify-between items-center mb-12">
                         <div className="flex gap-6"><div className="bg-white/10 border-2 border-white/20 p-3 px-10 rounded-2xl font-mono font-black text-white text-5xl">{Math.floor(gameState.time/60)}:{(gameState.time%60).toString().padStart(2,'0')}</div>
-                        <div className="bg-white/10 border-2 border-white/20 p-3 px-8 rounded-2xl flex flex-col items-center justify-center cursor-pointer" onClick={() => isAdmin && update('dice', Math.floor(Math.random()*3)+1)}><span className="text-[10px] font-black opacity-30 uppercase text-white">Шанс</span><div className="text-2xl font-black text-white">{gameState.dice}</div></div></div>
+                        <div className="bg-white/10 border-2 border-white/20 p-3 px-8 rounded-2xl flex flex-col items-center justify-center cursor-pointer" onClick={(e) => {
+    if(!isAdmin) return;
+    playSfx(sfx.click);
+    const el = e.currentTarget;
+    el.classList.add('dice-rolling');
+    setTimeout(() => el.classList.remove('dice-rolling'), 500);
+    update('dice', Math.floor(Math.random()*3)+1);
+}}><span className="text-[10px] font-black opacity-30 uppercase text-white">Шанс</span><div className="text-2xl font-black text-white">{gameState.dice}</div></div></div>
                         <div className="text-center"><h1 className="text-6xl font-black text-white tracking-tighter uppercase leading-none">Bunker </h1><p className="text-[14px] font-black opacity-30 tracking-[10px] mt-2 uppercase text-center">by lvyzap</p></div>
                         <div onClick={() => !isAdmin ? setShowPassModal(true) : setIsAdmin(false)} className={`px-8 py-3 border-2 rounded-2xl font-black text-[12px] cursor-pointer transition-all ${isAdmin ? 'bg-white text-black border-white shadow-[0_0_20px_white]' : 'opacity-20'}`}>АДМИН</div>
                     </div>
@@ -243,9 +367,9 @@
                     <div className="bunker-info-grid">{['d','b','i'].map(k => <div key={k} className="info-block"><span>{k==='d'?'Катастрофа':k==='b'?'Бункер':'Инвентарь'}</span><textarea disabled={!isAdmin} value={gameState.bunker?.[k]} onChange={e => update(`bunker/${k}`, e.target.value)} /></div>)}</div>
 
                     {isAdmin && <div className="flex gap-6 justify-center mb-12">
-                        <button onClick={() => update('currentEvent', MY_BUNKER_EVENTS.REID[Math.floor(Math.random()*MY_BUNKER_EVENTS.REID.length)])} className="bg-red-900 border-2 border-red-500 px-10 py-3 rounded-2xl font-black uppercase text-xs">РЕЙД</button>
-                        <button onClick={() => update('currentEvent', MY_BUNKER_EVENTS.SURVIVOR[Math.floor(Math.random()*MY_BUNKER_EVENTS.SURVIVOR.length)])} className="bg-blue-900 border-2 border-blue-500 px-10 py-3 rounded-2xl font-black uppercase text-xs">ВЫЖИВШИЙ</button>
-                        <button onClick={() => update('active', !gameState.active)} className="bg-green-800 border-2 border-green-500 px-10 py-3 rounded-2xl font-black text-xs uppercase">{gameState.active ? 'ПАУЗА' : 'СТАРТ'}</button>
+                        <button onClick={() => { playSfx(sfx.raid);update('currentEvent', MY_BUNKER_EVENTS.REID[Math.floor(Math.random()*MY_BUNKER_EVENTS.REID.length)])}} className="bg-red-900 border-2 border-red-500 px-10 py-3 rounded-2xl font-black uppercase text-xs">РЕЙД</button>
+                        <button onClick={() => { playSfx(sfx.survivor);update('currentEvent', MY_BUNKER_EVENTS.SURVIVOR[Math.floor(Math.random()*MY_BUNKER_EVENTS.SURVIVOR.length)])}} className="bg-blue-900 border-2 border-blue-500 px-10 py-3 rounded-2xl font-black uppercase text-xs">ВЫЖИВШИЙ</button>
+                        <button onClick={() => { playSfx(sfx.click);update('active', !gameState.active);}} className="bg-green-800 border-2 border-green-500 px-10 py-3 rounded-2xl font-black text-xs uppercase">{gameState.active ? 'ПАУЗА' : 'СТАРТ'}</button>
                         <button onClick={() => update('time', 0)} className="bg-white/10 border-2 border-white/20 px-10 py-3 rounded-2xl font-black text-xs uppercase">Сброс Таймера</button>
                         <button onClick={() => setShowResetModal(true)} className="bg-red-700 px-10 py-3 rounded-2xl font-black text-xs uppercase shadow-lg shadow-red-900/50">Сброс Системы</button>
                     </div>}
@@ -262,21 +386,55 @@
                                     {isAdmin ? <input className="stat-input" value={p.fert} onChange={e => update(`players/${pIdx}/fert`, e.target.value)} /> : <div className={`font-black text-[13px] uppercase ${(p.revealed?.fert || isMe) && p.fert === 'БЕСПЛОДЕН' ? 'text-red-500 shadow-[0_0_10px_red]' : 'text-white'}`}>{!(isAdmin || isMe || p.revealed?.fert) ? 'Секрет' : p.fert}</div>}
                                 </div>
                                 {!p.uid ? (myIdx===-1 && <button onClick={() => update(`players/${pIdx}/uid`, user.uid)} className="bg-white text-black text-[10px] font-black py-2.5 rounded-xl mt-3 uppercase">Занять Место</button>) : <div className="text-[10px] uppercase font-black opacity-30 mt-3">{isMe ? 'ВАША АНКЕТА' : 'ЗАНЯТО'}</div>}</div></div>
-                                <div className="grid grid-cols-2 gap-3 flex-grow border-t border-white/10 pt-8">
-                                    {['sex', 'age', 'prof', 'health', 'bag', 'hobby', 'phob', 'f1', 'f2'].map(f => {
-                                        const isRev = p.revealed?.[f] || isMe || isAdmin; const isExp = (f === 'prof' || f === 'hobby'); const expVal = f === 'prof' ? p.profExp : p.hobbyExp;
-                                        return <div key={f} className={`${f==='prof'||f.includes('f')?'col-span-2':''} stat-box ${isRev ? 'stat-revealed' : ''}`}>
-                                            <span className="stat-label">{f==='sex'?'Пол':f==='age'?'Возраст':LABELS[f]} {isAdmin && <span className="flex gap-1"><span onClick={() => update(`players/${pIdx}/${f}`, roll(f))} className="cursor-pointer">🎲</span>{isExp && <span onClick={() => update(`players/${pIdx}/${f+'Exp'}`, roll('years'))} className="cursor-pointer">⏳</span>}</span>}</span>
-                                            {isAdmin ? (<div className="flex gap-1"><input className="stat-input" value={p[f]} onChange={e => update(`players/${pIdx}/${f}`, e.target.value)} />{isExp && <input className="stat-input w-16" value={expVal} onChange={e => update(`players/${pIdx}/${f+'Exp'}`, e.target.value)} />}</div>) : <div className={`font-black text-[14px] uppercase ${!isRev ? 'blur-val' : 'text-white/90'}`}>{isRev ? (isExp ? `${p[f]} (${expVal} лет)` : p[f]) : 'Секрет'}</div>}
-                                        </div>
-                                    })}
-                                </div>
+                                {['sex', 'age', 'prof', 'health', 'bag', 'hobby', 'phob', 'f1', 'f2'].map(f => {
+                                    const isRev = (f === 'sex' || f === 'age') 
+                                 ? (p.revealed?.sex || p.revealed?.age || isMe || isAdmin) 
+                                   : (p.revealed?.[f] || isMe || isAdmin);
+    
+                                    const isExp = (f === 'prof' || f === 'hobby');
+                                    const expVal = f === 'prof' ? p.profExp : p.hobbyExp;
+
+                                return (
+                                 <div key={f} className={`${f==='prof'||f.includes('f')?'col-span-2':''} stat-box relative transition-all duration-500 ${p.revealed?.[f] ? 'stat-revealed' : ''}`}>
+                                 {p.revealed?.[f] && (
+                                     <div className="absolute top-2 right-2 flex items-center gap-1 scale-90 sm:scale-100">
+                                     <span className="text-[9px] font-black text-green-400 tracking-tighter opacity-80 uppercase">Вскрыто</span>
+                                     <span className="text-xs text-green-400 drop-shadow-[0_0_5px_rgba(74,222,128,0.8)]">✓</span>
+                     </div>
+                   )}
+                         <span className="stat-label">
+                            {f==='sex'?'Пол':f==='age'?'Возраст':LABELS[f]} 
+                               {isAdmin && (
+                               <span className="flex gap-1">
+                                   <span onClick={() => update(`players/${pIdx}/${f}`, roll(f))} className="cursor-pointer">🎲</span>
+                                   {isExp && <span onClick={() => update(`players/${pIdx}/${f+'Exp'}`, roll('years', p.age))} className="cursor-pointer">⏳</span>}
+                              </span>
+                    )}
+                    </span>
+
+                     {isAdmin ? (
+                     <div className="flex gap-1">
+                        <input className="stat-input" value={p[f]} onChange={e => update(`players/${pIdx}/${f}`, e.target.value)} />
+                       {isExp && <input className="stat-input w-16" value={expVal} onChange={e => update(`players/${pIdx}/${f+'Exp'}`, e.target.value)} />}
+                      </div>
+                     ) : (
+                          <div className={`font-black text-[14px] uppercase ${!isRev ? 'blur-val' : 'text-white/90'}`}>
+                              {isRev ? (isExp ? `${p[f]} (${expVal} лет)` : p[f]) : 'Секрет'}
+                          </div>
+                    )}
+                        </div>
+                    );
+                     })}
                                 <div className="grid grid-cols-2 gap-3 mt-6 pt-6 border-t border-white/10">
                                     {p.actions && p.actions.map((c, ci) => (
                                         <div key={ci} className="bg-white/5 border border-white/10 p-4 rounded-xl min-h-[110px] flex flex-col justify-between">
                                             <p className="text-[9px] font-bold uppercase opacity-70">{isMe || isAdmin ? c : 'BUNKER'}</p>
-                                            {isMe && <button onClick={() => { update('globalStop', {user: p.name, text: c}); const nA = p.actions.filter((_, i) => i !== ci); update(`players/${pIdx}/actions`, nA); }} className="bg-white text-black text-[9px] font-black py-1.5 rounded-lg uppercase">ЮЗНУТЬ</button>}
-                                        </div>
+                                            {isMe && <button onClick={() => { 
+                                                playSfx(sfx.stop); // Звук сработает СРАЗУ при клике
+                                                update('globalStop', {user: p.name, text: c}); 
+                                                const nA = p.actions.filter((_, i) => i !== ci); 
+                                                update(`players/${pIdx}/actions`, nA); 
+                                                }} className="bg-white text-black text-[9px] font-black py-1.5 rounded-lg uppercase">ЮЗНУТЬ</button>}                                        </div>
                                     ))}
                                 </div>
                                 <div className="mt-8 pt-6 border-t border-white/10 flex flex-wrap gap-2.5 justify-center">
